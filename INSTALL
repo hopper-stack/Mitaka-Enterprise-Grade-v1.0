@@ -1,0 +1,44 @@
+
+=================================
+         BUILD SEQUENCE
+=================================
+
+1. Build the servers based on the configuration-guide.xls found on the hopper~stack website
+   in the downloads tab.
+2. Ensure 1-9 compute nodes are created
+3. All VMs/Servers should be built with a minimum of "Infrastructure Server group"
+4. Add all additional networks and storage by design.
+5. We recommend only the compute nodes should be physical, all other servers can be created
+   as virtual machines until performance becomes an issue.
+
+	[see http://www.hopper-stack.co.uk]
+
+Ensure an NTP server exists or designate HAproxy#1 as the NTP server
+when modifying the variables file
+
+	[see http://www.hopper-stack.co.uk on how to create an NTP server on CentOS]
+
+
+ Login to a buildsvr server to hold the scripts
+------------------------------------------------
+We recommend a separate build-server but otherwise please choose the repository server
+for hosting the scripts
+
+# mkdir /run-scripts
+# cd /run-scripts
+# tar xf /tmp/hopper-enterprise-mitaka-v1.0.tar
+
+Modify variables file
+# vim variables
+
+Run the ansible installer
+# cd ansible
+# ./ansible-installer
+
+When complete login to controller#1 to verify the build
+# ./verify-hopper
+
+=================================
+         KNOWN ISSUES
+=================================
+Public catalog do not currently work.  We are looking into it

@@ -1,0 +1,156 @@
+#!/bin/bash
+
+:<<'hopper-stack-notice'
+
+Copyright 2016 Hopper-Stack
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+hopper-stack-notice
+
+echo "Start installation" > /tmp/date-check
+date >> /tmp/date-check
+
+# +------------------------------------------+
+# | VARIABLES                                |
+# +------------------------------------------+
+if [ ! -f ../variables ]; then
+   echo
+   echo " +-----------------------------------------+"
+   echo " |  variables file not in this directory   |"
+   echo " +-----------------------------------------+"
+   echo
+   exit
+fi
+source ../variables
+
+clear
+echo
+echo "+------------------------------------------+"
+echo "| Install Ansible                          |"
+echo "+------------------------------------------+"
+wget -nv http://$FILESERVER/$HTTPFILES/ansible/ansible-2.1.0.0.rpm > /dev/null 2>&1
+
+FILE=/etc/yum.repos.d/hopper.repo
+yum-config-manager --disable base > /dev/null 2>&1
+yum-config-manager --disable extras > /dev/null 2>&1
+yum-config-manager --disable updates > /dev/null 2>&1
+echo "[hopper]" > $FILE
+echo "name=Hopper~Stack $VERSION" >> $FILE
+echo "baseurl=http://$FILESERVER/$OSFLAVOR/7/0" >> $FILE
+echo "gpgcheck=0" >> $FILE
+echo "enabled=1" >> $FILE
+
+yum install -y sshpass > /dev/null 2>&1
+yum install -y PyYAML > /dev/null 2>&1
+yum install -y python-httplib2 > /dev/null 2>&1
+yum install -y python-jinja2 > /dev/null 2>&1
+yum install -y python-keyczar > /dev/null 2>&1
+yum install -y python-paramiko > /dev/null 2>&1
+rpm -Uh ansible-2.1.0.0.rpm
+
+echo "[defaults]" > ansible.cfg
+echo "forks          = 100" >> ansible.cfg
+echo "log_path=/var/log/orchestrate.log" >> ansible.cfg
+
+# +------------------------------------------+
+# | Create repository file                   |
+# +------------------------------------------+
+echo "[hopper]" > hopper.repo
+echo "name=Hopper~Stack $VERSION" >> hopper.repo
+echo "baseurl=http://$FILESERVER/$OSFLAVOR/7/0" >> hopper.repo
+echo "gpgcheck=0" >> hopper.repo
+echo "enabled=1" >> hopper.repo
+
+echo
+echo "+------------------------------------------+"
+echo "| Create configuration files               |"
+echo "+------------------------------------------+"
+echo "[default]" > hosts
+echo "localhost" >> hosts
+ansible-playbook -i hosts create-files.yml
+rm -rf hosts
+
+# +------------------------------------------+
+# | Distribute files                         |
+# +------------------------------------------+
+cd ..
+./distribute-files
+
+# +------------------------------------------+
+# | Hosts files                              |
+# +------------------------------------------+
+cd ansible
+echo "[controller1]" >> hosts
+echo "$CONTRL1IP" >> hosts
+echo >> hosts
+
+echo "[haproxy]" >> hosts
+echo "$HAPROXY1IP" >> hosts
+echo "$HAPROXY2IP" >> hosts
+echo >> hosts
+
+echo "[all-hosts]" > /tmp/all-hosts.txt
+cat ../variables | grep ^CONTRL[0-9]IP | cut -f2 -d= >> /tmp/all-hosts.txt
+cat ../variables | grep ^HAPROXY[0-9]IP | cut -f2 -d= >> /tmp/all-hosts.txt
+cat ../variables | grep ^NETWORK[0-9]IP | cut -f2 -d= >> /tmp/all-hosts.txt
+cat ../variables | grep ^STORAGE[0-9]IP | cut -f2 -d= >> /tmp/all-hosts.txt
+cat ../variables | grep ^COMPUTE[0-9]IP | cut -f2 -d= >> /tmp/all-hosts.txt
+
+if [ x$ENABLE_AMANDA == xTrue ]; then
+   echo "$BCKUPSERVER" >> /tmp/all-hosts.txt
+fi
+if [ x$ENABLE_NAGIOS == xTrue ]; then
+   echo "$NAGIOSSERVER" >> /tmp/all-hosts.txt
+fi
+if [ x$ENABLE_DNS == xTrue ]; then
+   echo "$DNSSERVERIP" >> /tmp/all-hosts.txt
+fi
+if [ x$ENABLE_SQUID == xTrue ]; then
+   echo "$SQUIDDSERVERIP" >> /tmp/all-hosts.txt
+fi
+if [ x$ENABLE_LOGSTASH == xTrue ]; then
+   echo "$LOGSTASHIP" >> /tmp/all-hosts.txt
+fi
+
+echo >> hosts
+cat /tmp/all-hosts.txt | sort -ru >> hosts
+
+echo "+------------------------------------------+"
+echo "| Orchestrate Stack                        |"
+echo "+------------------------------------------+"
+ansible-playbook -i hosts patch-all.yml --private-key ../ssh-key 
+ansible-playbook -i hosts reboot-all.yml --private-key ../ssh-key 
+ansible-playbook -i hosts orchestrate.yml --private-key ../ssh-key
+
+rm -f hopper.repo
+rm -f /tmp/all-hosts.txt
+rm -f ansible.cfg
+rm -f hosts
+rm -f ansible-2.1.0.0.rpm
+
+echo "End installation" >> /tmp/date-check
+date >> /tmp/date-check
+
+wget -nv wget -nv http://$FILESERVER/$OSFLAVOR/7/0/epel/f/figlet-2.2.5-9.el7.x86_64.rpm > /dev/null 2>&1
+rpm -ivh figlet-2.2.5-9.el7.x86_64.rpm > /dev/null 2>&1
+clear
+tput setaf 2
+echo
+echo
+figlet "    Hopper-Stack"
+echo
+tput setaf 2
+tput setaf 7
+echo
+
